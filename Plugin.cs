@@ -8,6 +8,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using MoreLevelTypesInPlus.LevelTypes_Constructor;
 
 namespace MoreLevelTypesInPlus
 {
@@ -25,15 +26,21 @@ namespace MoreLevelTypesInPlus
             __instance = this;
             harmony.PatchAllConditionals();
 
-            LoadingEvents.RegisterOnAssetsLoaded(Info, PostLoading(), true);
+            LoadingEvents.RegisterOnAssetsLoaded(Info, PreLoading(), false);
 
             ModdedSaveGame.AddSaveHandler(Info);
             GeneratorManagement.Register(this, GenerationModType.Preparation, TestCreateNewLevelTypes);
         }
-        private IEnumerator PostLoading()
+        private IEnumerator PreLoading()
         {
             yield return 1;
             yield return "Doing More Level Types!";
+
+            levels.Add(new LevelType_Castle().PreloadAssets());
+            levels.Add(new LevelType_Museum().PreloadAssets());
+
+
+
         }
 
         public void TestCreateNewLevelTypes(string levelName, int levelId, SceneObject scene)
@@ -41,35 +48,22 @@ namespace MoreLevelTypesInPlus
             if (scene.randomizedLevelObject.Length == 0)
                 return;
 
-            CustomLevelObject level = scene.GetCustomLevelObjects().Where(x => x.type == LevelType.Laboratory).FirstOrDefault();
-            CustomLevelObject customLevel = level.MakeClone();
-            customLevel.name = name.Replace("(Clone)", "").Replace("Laboratory", "Castle");
-            List<StructureWithParameters> structures = customLevel.forcedStructures.ToList();
-            structures.RemoveAll(x => x.prefab is Structure_TeleporterRoom);
-            customLevel.forcedStructures = structures.ToArray();
+            foreach (var level in levels)
+            {
+                CustomLevelObject labLevel = scene.GetCustomLevelObjects().Where(x => x.type == LevelType.Laboratory).FirstOrDefault();
+                CustomLevelObject customLevel = labLevel.MakeClone();
+                customLevel.name = customLevel.name.Replace("(Clone)", "").Replace("Laboratory", level.type.ToStringExtended());
+                List<StructureWithParameters> structures = customLevel.forcedStructures.ToList();
+                structures.RemoveAll(x => x.prefab is Structure_TeleporterRoom);
+                customLevel.forcedStructures = structures.ToArray();
 
-            customLevel = Castle_LevelType(customLevel);
+                customLevel = level.OverrideFloor(customLevel, levelId);
 
-            scene.randomizedLevelObject = scene.randomizedLevelObject.AddToArray(new WeightedLevelObject { selection = customLevel, weight = 999999 });
+                scene.randomizedLevelObject = scene.randomizedLevelObject.AddToArray(new WeightedLevelObject { selection = customLevel, weight = level.weight });
+            }
         }
 
-        public CustomLevelObject Castle_LevelType(CustomLevelObject baseLevel)
-        {
-            baseLevel.minPlots += 8;
-            baseLevel.maxPlots += 8;
-            baseLevel.minSize -= new IntVector2(7, 7);
-            baseLevel.maxSize -= new IntVector2(7, 7);
-            baseLevel.hallWallTexs = [new WeightedTexture2D { selection = AssetLoader.TextureFromMod(this, "CastleWall.png"), weight = 100 }];
-            baseLevel.hallFloorTexs = [new WeightedTexture2D { selection = AssetLoader.TextureFromMod(this, "CastleFloor.png"), weight = 100 }];
-            baseLevel.hallCeilingTexs = [new WeightedTexture2D { selection = AssetLoader.TextureFromMod(this, "CastleCeiling.png"), weight = 100 }];
-            baseLevel.standardLightStrength = 6;
-            baseLevel.maxLightDistance = 10;
-
-            //Adicionar jaulas e espinhos coloridos como estrutura base
-            //támbem adicionar a sala com suas funções princiapis
-            //adicionar lamparinas
-            return baseLevel;
-        }
+        public List<LevelType_Base> levels = [];
     }
 
     public static class PluginInfo
